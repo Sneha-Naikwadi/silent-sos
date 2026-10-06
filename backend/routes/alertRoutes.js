@@ -1,6 +1,5 @@
 const express = require("express");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
 
 const Alert = require("../models/Alert");
 const Contact = require("../models/Contact");
@@ -9,39 +8,75 @@ const router = express.Router();
 
 
 // ===============================
-// EMAIL TRANSPORTER
+// SEND EMAIL USING RESEND
 // ===============================
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+async function sendEmail(to, subject, html) {
+    const response = await fetch(
+        "https://api.resend.com/emails",
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization":
+                    `Bearer ${process.env.RESEND_API_KEY}`
+            },
+
+            body: JSON.stringify({
+                from: process.env.EMAIL_FROM,
+                to: [to],
+                subject: subject,
+                html: html
+            })
+        }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data?.message ||
+            `Resend API Error: ${response.status}`
+        );
     }
-});
+
+    return data;
+}
 
 
 // ===============================
 // CREATE SOS ALERT
 // ===============================
 router.post("/", async (req, res) => {
+
     try {
+
         console.log("========== CREATE SOS ==========");
         console.log("Request Body:", req.body);
 
+
         const { latitude, longitude } = req.body;
 
-        // Validate location
+
+        // ===============================
+        // VALIDATE LOCATION
+        // ===============================
         if (
             latitude === undefined ||
             longitude === undefined
         ) {
+
             return res.status(400).json({
                 success: false,
                 message: "Location is required"
             });
+
         }
 
-        // Generate alert ID
+
+        // ===============================
+        // GENERATE ALERT ID
+        // ===============================
         const alertId =
             "SOS-" +
             crypto
@@ -49,18 +84,31 @@ router.post("/", async (req, res) => {
                 .toString("hex")
                 .toUpperCase();
 
-        // Save alert
+
+        // ===============================
+        // SAVE ALERT TO MONGODB
+        // ===============================
         const alert = await Alert.create({
+
             alertId,
             latitude,
             longitude
+
         });
 
-        console.log("SOS Alert saved:", alert);
+
+        console.log(
+            "SOS Alert saved:",
+            alert
+        );
 
 
-        // Get contacts
-        const contacts = await Contact.find();
+        // ===============================
+        // GET EMERGENCY CONTACTS
+        // ===============================
+        const contacts =
+            await Contact.find();
+
 
         console.log(
             "Emergency contacts found:",
@@ -68,69 +116,106 @@ router.post("/", async (req, res) => {
         );
 
 
-        // Google Maps link
+        // ===============================
+        // GOOGLE MAPS LINK
+        // ===============================
         const mapLink =
             `https://www.google.com/maps?q=${latitude},${longitude}`;
 
 
-        // Send email to every contact
+        // ===============================
+        // SEND EMAIL TO EVERY CONTACT
+        // ===============================
+        let sentCount = 0;
+        let failedCount = 0;
+
+
         for (const contact of contacts) {
 
             try {
 
-                await transporter.sendMail({
-                    from: process.env.EMAIL_USER,
-                    to: contact.email,
+                const emailHTML = `
 
-                    subject:
+                    <div
+                        style="
+                            font-family: Arial, sans-serif;
+                            padding: 20px;
+                        "
+                    >
+
+                        <h2
+                            style="
+                                color: red;
+                            "
+                        >
+                            🚨 Silent SOS Emergency Alert
+                        </h2>
+
+
+                        <p>
+                            An emergency alert has been triggered.
+                        </p>
+
+
+                        <p>
+                            <strong>Alert ID:</strong>
+                            ${alertId}
+                        </p>
+
+
+                        <p>
+                            <strong>Location:</strong>
+                            <a
+                                href="${mapLink}"
+                                target="_blank"
+                            >
+                                View Live Location
+                            </a>
+                        </p>
+
+
+                        <p>
+                            <strong>Latitude:</strong>
+                            ${latitude}
+                        </p>
+
+
+                        <p>
+                            <strong>Longitude:</strong>
+                            ${longitude}
+                        </p>
+
+
+                        <p>
+                            Please respond immediately.
+                        </p>
+
+                    </div>
+
+                `;
+
+
+                const result =
+                    await sendEmail(
+                        contact.email,
                         "🚨 SILENT SOS EMERGENCY ALERT",
+                        emailHTML
+                    );
 
-                    html: `
-                        <div style="font-family: Arial, sans-serif;">
 
-                            <h2 style="color:red;">
-                                🚨 Silent SOS Emergency Alert
-                            </h2>
+                sentCount++;
 
-                            <p>
-                                An emergency alert has been triggered.
-                            </p>
-
-                            <p>
-                                <strong>Alert ID:</strong>
-                                ${alertId}
-                            </p>
-
-                            <p>
-                                <strong>Location:</strong>
-                                <a href="${mapLink}" target="_blank">
-                                    View Live Location
-                                </a>
-                            </p>
-
-                            <p>
-                                <strong>Latitude:</strong>
-                                ${latitude}
-                            </p>
-
-                            <p>
-                                <strong>Longitude:</strong>
-                                ${longitude}
-                            </p>
-
-                            <p>
-                                Please respond immediately.
-                            </p>
-
-                        </div>
-                    `
-                });
 
                 console.log(
-                    `Email sent to ${contact.email}`
+                    `Email sent to ${contact.email}`,
+                    result
                 );
 
+
             } catch (emailError) {
+
+                failedCount++;
+
 
                 console.error(
                     `Email failed for ${contact.email}:`,
@@ -138,24 +223,47 @@ router.post("/", async (req, res) => {
                 );
 
             }
+
         }
 
 
+        // ===============================
+        // RESPONSE
+        // ===============================
         res.status(201).json({
+
             success: true,
-            message: "SOS alert sent successfully",
-            alert
+
+            message:
+                "SOS alert processed successfully",
+
+            alert,
+
+            emailsSent: sentCount,
+
+            emailsFailed: failedCount
+
         });
+
 
     } catch (error) {
 
-        console.error("CREATE SOS ERROR:", error);
+        console.error(
+            "CREATE SOS ERROR:",
+            error
+        );
+
 
         res.status(500).json({
+
             success: false,
+
             message: error.message
+
         });
+
     }
+
 });
 
 
@@ -163,25 +271,43 @@ router.post("/", async (req, res) => {
 // GET ALL ALERTS
 // ===============================
 router.get("/", async (req, res) => {
+
     try {
 
-        const alerts = await Alert.find()
-            .sort({ createdAt: -1 });
+        const alerts =
+            await Alert.find()
+                .sort({
+                    createdAt: -1
+                });
+
 
         res.status(200).json({
+
             success: true,
+
             alerts
+
         });
+
 
     } catch (error) {
 
-        console.error("GET ALERTS ERROR:", error);
+        console.error(
+            "GET ALERTS ERROR:",
+            error
+        );
+
 
         res.status(500).json({
+
             success: false,
+
             message: error.message
+
         });
+
     }
+
 });
 
 
@@ -189,44 +315,71 @@ router.get("/", async (req, res) => {
 // RESOLVE ALERT
 // ===============================
 router.put("/:id/resolve", async (req, res) => {
+
     try {
 
         const alert =
             await Alert.findByIdAndUpdate(
+
                 req.params.id,
+
                 {
                     status: "RESOLVED"
                 },
+
                 {
                     new: true
                 }
+
             );
 
+
         if (!alert) {
+
             return res.status(404).json({
+
                 success: false,
+
                 message: "Alert not found"
+
             });
+
         }
 
+
         res.json({
+
             success: true,
+
             message: "Alert resolved",
+
             alert
+
         });
+
 
     } catch (error) {
 
-        console.error("RESOLVE ALERT ERROR:", error);
+        console.error(
+            "RESOLVE ALERT ERROR:",
+            error
+        );
+
 
         res.status(500).json({
+
             success: false,
+
             message: error.message
+
         });
+
     }
+
 });
 
 
-// IMPORTANT
-// Export router
+// ===============================
+// EXPORT ROUTER
+// ===============================
 module.exports = router;
