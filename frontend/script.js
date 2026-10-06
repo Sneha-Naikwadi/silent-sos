@@ -4,7 +4,7 @@
 
 
 // Backend URL
-const API_URL = "https://silent-sos-xg08.onrender.com";
+const API_URL = "https://silent-sos-xgo8.onrender.com";
 
 // ==========================================
 // DOM ELEMENTS
