@@ -6,7 +6,6 @@
 // Backend URL
 const API_URL = "https://silent-sos-xg08.onrender.com";
 
-
 // ==========================================
 // DOM ELEMENTS
 // ==========================================
