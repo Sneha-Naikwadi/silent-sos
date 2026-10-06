@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Silent SOS | Emergency Safety</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ================= HEADER ================= -->
+
+    <header class="header">
+
+        <div class="logo-section">
+
+            <div class="logo-icon">
+                🛡️
+            </div>
+
+            <div>
+                <h1>Silent SOS</h1>
+
+                <p>
+                    EMERGENCY SAFETY SYSTEM
+                </p>
+            </div>
+
+        </div>
+
+
+        <button
+            id="sosButton"
+            class="sos-button"
+        >
+            🚨 SOS
+        </button>
+
+    </header>
+
+
+    <!-- ================= MAIN ================= -->
+
+    <main class="container">
+
+
+        <!-- ================= HERO ================= -->
+
+        <section class="hero">
+
+            <div class="hero-content">
+
+                <h2>
+                    Your Safety,
+                    <span>Our Priority</span>
+                </h2>
+
+                <p>
+                    Send an emergency alert with your current
+                    location to your trusted contacts.
+                </p>
+
+                <button
+                    id="heroSosButton"
+                    class="hero-sos-button"
+                >
+                    🚨 Send SOS Alert
+                </button>
+
+            </div>
+
+            <div class="hero-icon">
+                🆘
+            </div>
+
+        </section>
+
+
+        <!-- ================= STATUS ================= -->
+
+        <section class="status-card">
+
+            <div class="status-icon">
+                🛡️
+            </div>
+
+            <div>
+
+                <h3 id="statusTitle">
+                    System Ready
+                </h3>
+
+                <p id="statusMessage">
+                    Your Silent SOS system is ready
+                    to protect you.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= CONTACT SECTION ================= -->
+
+        <section class="contact-section">
+
+
+            <!-- ADD CONTACT -->
+
+            <div class="card">
+
+                <div class="card-header">
+
+                    <div class="card-icon">
+                        👥
+                    </div>
+
+                    <div>
+
+                        <h2>
+                            Add Trusted Contact
+                        </h2>
+
+                        <p>
+                            This contact will receive your SOS alert.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <form id="contactForm">
+
+
+                    <div class="form-group">
+
+                        <label for="name">
+                            Full Name
+                        </label>
+
+                        <input
+                            type="text"
+                            id="name"
+                            placeholder="Enter full name"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="email">
+                            Email Address
+                        </label>
+
+                        <input
+                            type="email"
+                            id="email"
+                            placeholder="Enter email address"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="phone">
+                            Phone Number
+                        </label>
+
+                        <input
+                            type="tel"
+                            id="phone"
+                            placeholder="+91XXXXXXXXXX"
+                        >
+
+                    </div>
+
+
+                    <button
+                        type="submit"
+                        class="add-contact-button"
+                    >
+                        + Add Emergency Contact
+                    </button>
+
+                </form>
+
+            </div>
+
+
+            <!-- CONTACT LIST -->
+
+            <div class="card">
+
+                <div class="contacts-heading">
+
+                    <div>
+
+                        <h2>
+                            Your Contacts
+                        </h2>
+
+                        <p>
+                            Trusted safety network
+                        </p>
+
+                    </div>
+
+                    <div
+                        id="contactCount"
+                        class="contact-count"
+                    >
+                        0
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="contactsList"
+                    class="contacts-list"
+                >
+
+                    <div class="empty-state">
+
+                        <div class="empty-icon">
+                            👥
+                        </div>
+
+                        <p>
+                            No emergency contacts added.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ================= HOW IT WORKS ================= -->
+
+        <section class="how-section">
+
+            <h2>
+                How Silent SOS Works
+            </h2>
+
+            <div class="steps">
+
+
+                <div class="step">
+
+                    <div class="step-number">
+                        1
+                    </div>
+
+                    <h3>
+                        Add Contact
+                    </h3>
+
+                    <p>
+                        Add trusted emergency contacts.
+                    </p>
+
+                </div>
+
+
+                <div class="step">
+
+                    <div class="step-number">
+                        2
+                    </div>
+
+                    <h3>
+                        Press SOS
+                    </h3>
+
+                    <p>
+                        Press the SOS button during an emergency.
+                    </p>
+
+                </div>
+
+
+                <div class="step">
+
+                    <div class="step-number">
+                        3
+                    </div>
+
+                    <h3>
+                        Location Shared
+                    </h3>
+
+                    <p>
+                        Your current location is captured.
+                    </p>
+
+                </div>
+
+
+                <div class="step">
+
+                    <div class="step-number">
+                        4
+                    </div>
+
+                    <h3>
+                        Alert Sent
+                    </h3>
+
+                    <p>
+                        Emergency contacts receive an email alert.
+                    </p>
+
+                </div>
+
+
+            </div>
+
+        </section>
+
+
+    </main>
+
+
+    <!-- ================= FOOTER ================= -->
+
+    <footer>
+
+        <p>
+            © 2026 Silent SOS. Emergency Safety System.
+        </p>
+
+    </footer>
+
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
