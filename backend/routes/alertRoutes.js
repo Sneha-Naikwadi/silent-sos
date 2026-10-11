@@ -1,15 +1,14 @@
+
 const express = require("express");
 const crypto = require("crypto");
 const twilio = require("twilio");
 
 const Alert = require("../models/Alert");
-const Contact = require("../models/Contact");
 
 const router = express.Router();
 
-
 // ===============================
-// TWILIO CLIENT
+// TWILIO CONFIGURATION
 // ===============================
 
 const twilioClient = twilio(
@@ -17,417 +16,188 @@ const twilioClient = twilio(
     process.env.TWILIO_AUTH_TOKEN
 );
 
+const WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
 
-// ===============================
-// TWILIO WHATSAPP SETTINGS
-// ===============================
-
-const WHATSAPP_FROM =
-    process.env.TWILIO_WHATSAPP_FROM;
-
-
-// Twilio Trial / Sandbox
-// Pre-approved Appointment Reminder template
-const CONTENT_SID =
-    "HXb5b62575e6e4ff6129ad7c8efe1f983e";
-
+// Test only: use the WhatsApp number that joined your Sandbox.
+// Example environment variable value: 7385201801
+const TEST_PHONE = process.env.TWILIO_TEST_PHONE;
 
 // ===============================
 // CREATE SOS ALERT
 // ===============================
 
 router.post("/", async (req, res) => {
-
     try {
-
         console.log("========== CREATE SOS ==========");
-        console.log("Request Body:", req.body);
 
+        const { latitude, longitude } = req.body;
 
-        const {
-            latitude,
-            longitude
-        } = req.body;
-
-
-        // ===============================
-        // VALIDATE LOCATION
-        // ===============================
-
+        // Validate location
         if (
             latitude === undefined ||
-            longitude === undefined
+            longitude === undefined ||
+            !Number.isFinite(Number(latitude)) ||
+            !Number.isFinite(Number(longitude)) ||
+            Number(latitude) < -90 ||
+            Number(latitude) > 90 ||
+            Number(longitude) < -180 ||
+            Number(longitude) > 180
         ) {
-
             return res.status(400).json({
                 success: false,
-                message: "Location is required"
+                message: "Valid latitude and longitude are required"
             });
-
         }
 
+        // Check Twilio test configuration before creating alert
+        if (!TEST_PHONE || !WHATSAPP_FROM) {
+            return res.status(500).json({
+                success: false,
+                message:
+                    "Configure TWILIO_TEST_PHONE and TWILIO_WHATSAPP_FROM"
+            });
+        }
 
-        // ===============================
-        // GENERATE ALERT ID
-        // ===============================
-
+        // Generate alert ID
         const alertId =
             "SOS-" +
-            crypto
-                .randomBytes(4)
-                .toString("hex")
-                .toUpperCase();
+            crypto.randomBytes(4).toString("hex").toUpperCase();
 
+        // Save SOS alert
+        const alert = await Alert.create({
+            alertId,
+            latitude: Number(latitude),
+            longitude: Number(longitude)
+        });
 
-        // ===============================
-        // SAVE ALERT TO MONGODB
-        // ===============================
-
-        const alert =
-            await Alert.create({
-
-                alertId,
-                latitude,
-                longitude
-
-            });
-
-
-        console.log(
-            "SOS Alert saved:",
-            alert
-        );
-
-
-        // ===============================
-        // GET EMERGENCY CONTACTS
-        // ===============================
-
-        const contacts =
-            await Contact.find();
-
-
-        console.log(
-            "Emergency contacts found:",
-            contacts.length
-        );
-
-
-        // ===============================
-        // GOOGLE MAPS LINK
-        // ===============================
-
+        // Google Maps link
         const mapLink =
             `https://www.google.com/maps?q=${latitude},${longitude}`;
 
+        // Format test recipient number
+        let phone = TEST_PHONE.trim();
 
-        console.log(
-            "Google Maps Link:",
-            mapLink
-        );
-
-
-        // ===============================
-        // SEND WHATSAPP
-        // ===============================
-
-        let whatsappSent = 0;
-        let whatsappFailed = 0;
-
-
-        for (const contact of contacts) {
-
-            try {
-
-                // ===============================
-                // CHECK PHONE NUMBER
-                // ===============================
-
-                if (!contact.phone) {
-
-                    console.log(
-                        `No phone number for ${contact.name}`
-                    );
-
-                    whatsappFailed++;
-
-                    continue;
-                }
-
-
-                // ===============================
-                // FORMAT PHONE NUMBER
-                // ===============================
-
-                let phone =
-                    contact.phone.trim();
-
-
-                // Example:
-                // 9876543210
-                // becomes:
-                // +919876543210
-
-                if (
-                    phone.length === 10 &&
-                    /^[0-9]+$/.test(phone)
-                ) {
-
-                    phone =
-                        "+91" + phone;
-
-                }
-
-
-                const whatsappTo =
-                    `whatsapp:${phone}`;
-
-
-                console.log(
-                    "Sending WhatsApp to:",
-                    whatsappTo
-                );
-
-
-                // ===============================
-                // CURRENT DATE & TIME
-                // ===============================
-
-                const currentDate =
-                    new Date();
-
-
-                const dateText =
-                    currentDate.toLocaleDateString(
-                        "en-IN"
-                    );
-
-
-                const timeText =
-                    currentDate.toLocaleTimeString(
-                        "en-IN"
-                    );
-
-
-                // ===============================
-                // SEND TWILIO TEMPLATE
-                // ===============================
-
-                const message =
-                    await twilioClient.messages.create({
-
-                        from:
-                            WHATSAPP_FROM,
-
-                        to:
-                            whatsappTo,
-
-                        contentSid:
-                            CONTENT_SID,
-
-                        contentVariables:
-                            JSON.stringify({
-
-                                "1":
-                                    dateText,
-
-                                "2":
-                                    timeText
-
-                            })
-
-                    });
-
-
-                whatsappSent++;
-
-
-                console.log(
-                    `WhatsApp sent successfully to ${contact.phone}`
-                );
-
-                console.log(
-                    "Message SID:",
-                    message.sid
-                );
-
-
-            } catch (whatsappError) {
-
-                whatsappFailed++;
-
-
-                console.error(
-                    `WhatsApp failed for ${contact.phone}:`,
-                    whatsappError.message
-                );
-
-            }
-
+        if (/^[0-9]{10}$/.test(phone)) {
+            phone = "+91" + phone;
+        } else if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+            return res.status(500).json({
+                success: false,
+                message:
+                    "TWILIO_TEST_PHONE must be a 10-digit Indian number or E.164 number"
+            });
         }
 
+        const whatsappTo = `whatsapp:${phone}`;
 
-        // ===============================
-        // RESPONSE
-        // ===============================
+        // IMPORTANT: Only one Sandbox-joined test recipient
+        let whatsappSent = 0;
+        let whatsappFailed = 0;
+        let messageSid = null;
+        let messageStatus = null;
+        let whatsappErrorMessage = null;
 
-        res.status(201).json({
+        try {
+            const message = await twilioClient.messages.create({
+                from: WHATSAPP_FROM,
+                to: whatsappTo,
+                body:
+                    `🚨 SILENT SOS - EMERGENCY ALERT\n\n` +
+                    `Emergency! I need help. Please contact me immediately.\n\n` +
+                    `My location:\n${mapLink}\n\n` +
+                    `Alert ID: ${alertId}`
+            });
 
+            // Request accepted by Twilio; delivery is not guaranteed yet
+            whatsappSent = 1;
+            messageSid = message.sid;
+            messageStatus = message.status;
+
+            console.log("Twilio Message SID:", message.sid);
+            console.log("Initial message status:", message.status);
+        } catch (error) {
+            whatsappFailed = 1;
+            whatsappErrorMessage = error.message;
+
+            console.error("WhatsApp send failed:", error.message);
+            console.error("Twilio error code:", error.code);
+        }
+
+        return res.status(201).json({
             success: true,
-
-            message:
-                "SOS alert processed successfully",
-
+            message: "SOS alert saved",
             alert,
-
+            mapLink,
             whatsappSent,
-
             whatsappFailed,
-
-            mapLink
-
+            messageSid,
+            messageStatus,
+            whatsappError: whatsappErrorMessage
         });
-
-
     } catch (error) {
+        console.error("CREATE SOS ERROR:", error);
 
-        console.error(
-            "CREATE SOS ERROR:",
-            error
-        );
-
-
-        res.status(500).json({
-
+        return res.status(500).json({
             success: false,
-
-            message:
-                error.message
-
+            message: error.message
         });
-
     }
-
 });
-
 
 // ===============================
 // GET ALL ALERTS
 // ===============================
 
 router.get("/", async (req, res) => {
-
     try {
+        const alerts = await Alert.find().sort({ createdAt: -1 });
 
-        const alerts =
-            await Alert.find()
-                .sort({
-                    createdAt: -1
-                });
-
-
-        res.status(200).json({
-
+        return res.status(200).json({
             success: true,
-
             alerts
-
         });
-
-
     } catch (error) {
+        console.error("GET ALERTS ERROR:", error);
 
-        console.error(
-            "GET ALERTS ERROR:",
-            error
-        );
-
-
-        res.status(500).json({
-
+        return res.status(500).json({
             success: false,
-
-            message:
-                error.message
-
+            message: error.message
         });
-
     }
-
 });
-
 
 // ===============================
 // RESOLVE ALERT
 // ===============================
 
 router.put("/:id/resolve", async (req, res) => {
-
     try {
-
-        const alert =
-            await Alert.findByIdAndUpdate(
-
-                req.params.id,
-
-                {
-                    status: "RESOLVED"
-                },
-
-                {
-                    new: true
-                }
-
-            );
-
-
-        if (!alert) {
-
-            return res.status(404).json({
-
-                success: false,
-
-                message:
-                    "Alert not found"
-
-            });
-
-        }
-
-
-        res.json({
-
-            success: true,
-
-            message:
-                "Alert resolved",
-
-            alert
-
-        });
-
-
-    } catch (error) {
-
-        console.error(
-            "RESOLVE ALERT ERROR:",
-            error
+        const alert = await Alert.findByIdAndUpdate(
+            req.params.id,
+            { status: "RESOLVED" },
+            { new: true }
         );
 
+        if (!alert) {
+            return res.status(404).json({
+                success: false,
+                message: "Alert not found"
+            });
+        }
 
-        res.status(500).json({
-
-            success: false,
-
-            message:
-                error.message
-
+        return res.json({
+            success: true,
+            message: "Alert resolved",
+            alert
         });
+    } catch (error) {
+        console.error("RESOLVE ALERT ERROR:", error);
 
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
-
 });
-
 
 // ===============================
 // EXPORT ROUTER
