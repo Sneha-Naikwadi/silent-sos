@@ -15,13 +15,13 @@ router.post("/", async (req, res) => {
         const { name, email, phone } = req.body;
 
         // Validation
-        if (!name || !email) {
-            return res.status(400).json({
-                success: false,
-                message: "Name and email are required"
-            });
-        }
-
+       
+if (!name || !email || !phone || !/^\+[1-9]\d{7,14}$/.test(phone.trim())) {
+    return res.status(400).json({
+        success: false,
+        message: "Name, email and valid phone number are required"
+    });
+}
         // Create contact
         const contact = await Contact.create({
             name: name.trim(),

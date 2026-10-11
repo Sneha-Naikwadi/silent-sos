@@ -1,5 +1,6 @@
 const express = require("express");
 const crypto = require("crypto");
+const twilio = require("twilio");
 
 const Alert = require("../models/Alert");
 const Contact = require("../models/Contact");
@@ -8,45 +9,33 @@ const router = express.Router();
 
 
 // ===============================
-// SEND EMAIL USING RESEND
+// TWILIO CLIENT
 // ===============================
-async function sendEmail(to, subject, html) {
-    const response = await fetch(
-        "https://api.resend.com/emails",
-        {
-            method: "POST",
 
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization":
-                    `Bearer ${process.env.RESEND_API_KEY}`
-            },
+const twilioClient = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+);
 
-            body: JSON.stringify({
-                from: process.env.EMAIL_FROM,
-                to: [to],
-                subject: subject,
-                html: html
-            })
-        }
-    );
 
-    const data = await response.json();
+// ===============================
+// TWILIO WHATSAPP SETTINGS
+// ===============================
 
-    if (!response.ok) {
-        throw new Error(
-            data?.message ||
-            `Resend API Error: ${response.status}`
-        );
-    }
+const WHATSAPP_FROM =
+    process.env.TWILIO_WHATSAPP_FROM;
 
-    return data;
-}
+
+// Twilio Trial / Sandbox
+// Pre-approved Appointment Reminder template
+const CONTENT_SID =
+    "HXb5b62575e6e4ff6129ad7c8efe1f983e";
 
 
 // ===============================
 // CREATE SOS ALERT
 // ===============================
+
 router.post("/", async (req, res) => {
 
     try {
@@ -55,12 +44,16 @@ router.post("/", async (req, res) => {
         console.log("Request Body:", req.body);
 
 
-        const { latitude, longitude } = req.body;
+        const {
+            latitude,
+            longitude
+        } = req.body;
 
 
         // ===============================
         // VALIDATE LOCATION
         // ===============================
+
         if (
             latitude === undefined ||
             longitude === undefined
@@ -77,6 +70,7 @@ router.post("/", async (req, res) => {
         // ===============================
         // GENERATE ALERT ID
         // ===============================
+
         const alertId =
             "SOS-" +
             crypto
@@ -88,13 +82,15 @@ router.post("/", async (req, res) => {
         // ===============================
         // SAVE ALERT TO MONGODB
         // ===============================
-        const alert = await Alert.create({
 
-            alertId,
-            latitude,
-            longitude
+        const alert =
+            await Alert.create({
 
-        });
+                alertId,
+                latitude,
+                longitude
+
+            });
 
 
         console.log(
@@ -106,6 +102,7 @@ router.post("/", async (req, res) => {
         // ===============================
         // GET EMERGENCY CONTACTS
         // ===============================
+
         const contacts =
             await Contact.find();
 
@@ -119,107 +116,150 @@ router.post("/", async (req, res) => {
         // ===============================
         // GOOGLE MAPS LINK
         // ===============================
+
         const mapLink =
             `https://www.google.com/maps?q=${latitude},${longitude}`;
 
 
+        console.log(
+            "Google Maps Link:",
+            mapLink
+        );
+
+
         // ===============================
-        // SEND EMAIL TO EVERY CONTACT
+        // SEND WHATSAPP
         // ===============================
-        let sentCount = 0;
-        let failedCount = 0;
+
+        let whatsappSent = 0;
+        let whatsappFailed = 0;
 
 
         for (const contact of contacts) {
 
             try {
 
-                const emailHTML = `
+                // ===============================
+                // CHECK PHONE NUMBER
+                // ===============================
 
-                    <div
-                        style="
-                            font-family: Arial, sans-serif;
-                            padding: 20px;
-                        "
-                    >
+                if (!contact.phone) {
 
-                        <h2
-                            style="
-                                color: red;
-                            "
-                        >
-                            🚨 Silent SOS Emergency Alert
-                        </h2>
-
-
-                        <p>
-                            An emergency alert has been triggered.
-                        </p>
-
-
-                        <p>
-                            <strong>Alert ID:</strong>
-                            ${alertId}
-                        </p>
-
-
-                        <p>
-                            <strong>Location:</strong>
-                            <a
-                                href="${mapLink}"
-                                target="_blank"
-                            >
-                                View Live Location
-                            </a>
-                        </p>
-
-
-                        <p>
-                            <strong>Latitude:</strong>
-                            ${latitude}
-                        </p>
-
-
-                        <p>
-                            <strong>Longitude:</strong>
-                            ${longitude}
-                        </p>
-
-
-                        <p>
-                            Please respond immediately.
-                        </p>
-
-                    </div>
-
-                `;
-
-
-                const result =
-                    await sendEmail(
-                        contact.email,
-                        "🚨 SILENT SOS EMERGENCY ALERT",
-                        emailHTML
+                    console.log(
+                        `No phone number for ${contact.name}`
                     );
 
+                    whatsappFailed++;
 
-                sentCount++;
+                    continue;
+                }
+
+
+                // ===============================
+                // FORMAT PHONE NUMBER
+                // ===============================
+
+                let phone =
+                    contact.phone.trim();
+
+
+                // Example:
+                // 9876543210
+                // becomes:
+                // +919876543210
+
+                if (
+                    phone.length === 10 &&
+                    /^[0-9]+$/.test(phone)
+                ) {
+
+                    phone =
+                        "+91" + phone;
+
+                }
+
+
+                const whatsappTo =
+                    `whatsapp:${phone}`;
 
 
                 console.log(
-                    `Email sent to ${contact.email}`,
-                    result
+                    "Sending WhatsApp to:",
+                    whatsappTo
                 );
 
 
-            } catch (emailError) {
+                // ===============================
+                // CURRENT DATE & TIME
+                // ===============================
 
-                failedCount++;
+                const currentDate =
+                    new Date();
+
+
+                const dateText =
+                    currentDate.toLocaleDateString(
+                        "en-IN"
+                    );
+
+
+                const timeText =
+                    currentDate.toLocaleTimeString(
+                        "en-IN"
+                    );
+
+
+                // ===============================
+                // SEND TWILIO TEMPLATE
+                // ===============================
+
+                const message =
+                    await twilioClient.messages.create({
+
+                        from:
+                            WHATSAPP_FROM,
+
+                        to:
+                            whatsappTo,
+
+                        contentSid:
+                            CONTENT_SID,
+
+                        contentVariables:
+                            JSON.stringify({
+
+                                "1":
+                                    dateText,
+
+                                "2":
+                                    timeText
+
+                            })
+
+                    });
+
+
+                whatsappSent++;
+
+
+                console.log(
+                    `WhatsApp sent successfully to ${contact.phone}`
+                );
+
+                console.log(
+                    "Message SID:",
+                    message.sid
+                );
+
+
+            } catch (whatsappError) {
+
+                whatsappFailed++;
 
 
                 console.error(
-                    `Email failed for ${contact.email}:`,
-                    emailError.message
+                    `WhatsApp failed for ${contact.phone}:`,
+                    whatsappError.message
                 );
 
             }
@@ -230,6 +270,7 @@ router.post("/", async (req, res) => {
         // ===============================
         // RESPONSE
         // ===============================
+
         res.status(201).json({
 
             success: true,
@@ -239,9 +280,11 @@ router.post("/", async (req, res) => {
 
             alert,
 
-            emailsSent: sentCount,
+            whatsappSent,
 
-            emailsFailed: failedCount
+            whatsappFailed,
+
+            mapLink
 
         });
 
@@ -258,7 +301,8 @@ router.post("/", async (req, res) => {
 
             success: false,
 
-            message: error.message
+            message:
+                error.message
 
         });
 
@@ -270,6 +314,7 @@ router.post("/", async (req, res) => {
 // ===============================
 // GET ALL ALERTS
 // ===============================
+
 router.get("/", async (req, res) => {
 
     try {
@@ -302,7 +347,8 @@ router.get("/", async (req, res) => {
 
             success: false,
 
-            message: error.message
+            message:
+                error.message
 
         });
 
@@ -314,6 +360,7 @@ router.get("/", async (req, res) => {
 // ===============================
 // RESOLVE ALERT
 // ===============================
+
 router.put("/:id/resolve", async (req, res) => {
 
     try {
@@ -340,7 +387,8 @@ router.put("/:id/resolve", async (req, res) => {
 
                 success: false,
 
-                message: "Alert not found"
+                message:
+                    "Alert not found"
 
             });
 
@@ -351,7 +399,8 @@ router.put("/:id/resolve", async (req, res) => {
 
             success: true,
 
-            message: "Alert resolved",
+            message:
+                "Alert resolved",
 
             alert
 
@@ -370,7 +419,8 @@ router.put("/:id/resolve", async (req, res) => {
 
             success: false,
 
-            message: error.message
+            message:
+                error.message
 
         });
 
@@ -382,4 +432,5 @@ router.put("/:id/resolve", async (req, res) => {
 // ===============================
 // EXPORT ROUTER
 // ===============================
+
 module.exports = router;
