@@ -1,9 +1,9 @@
-
 const express = require("express");
 const crypto = require("crypto");
 const twilio = require("twilio");
 
 const Alert = require("../models/Alert");
+const Contact = require("../models/Contact");
 
 const router = express.Router();
 
@@ -17,10 +17,6 @@ const twilioClient = twilio(
 );
 
 const WHATSAPP_FROM = process.env.TWILIO_WHATSAPP_FROM;
-
-// Test only: use the WhatsApp number that joined your Sandbox.
-// Example environment variable value: 7385201801
-const TEST_PHONE = process.env.TWILIO_TEST_PHONE;
 
 // ===============================
 // CREATE SOS ALERT
@@ -49,12 +45,14 @@ router.post("/", async (req, res) => {
             });
         }
 
-        // Check Twilio test configuration before creating alert
-        if (!TEST_PHONE || !WHATSAPP_FROM) {
+        if (
+            !process.env.TWILIO_ACCOUNT_SID ||
+            !process.env.TWILIO_AUTH_TOKEN ||
+            !WHATSAPP_FROM
+        ) {
             return res.status(500).json({
                 success: false,
-                message:
-                    "Configure TWILIO_TEST_PHONE and TWILIO_WHATSAPP_FROM"
+                message: "Twilio environment variables are missing"
             });
         }
 
@@ -74,52 +72,79 @@ router.post("/", async (req, res) => {
         const mapLink =
             `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-        // Format test recipient number
-        let phone = TEST_PHONE.trim();
+        // Get contacts from MongoDB
+        const contacts = await Contact.find();
 
-        if (/^[0-9]{10}$/.test(phone)) {
-            phone = "+91" + phone;
-        } else if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-            return res.status(500).json({
-                success: false,
-                message:
-                    "TWILIO_TEST_PHONE must be a 10-digit Indian number or E.164 number"
-            });
-        }
-
-        const whatsappTo = `whatsapp:${phone}`;
-
-        // IMPORTANT: Only one Sandbox-joined test recipient
         let whatsappSent = 0;
         let whatsappFailed = 0;
-        let messageSid = null;
-        let messageStatus = null;
-        let whatsappErrorMessage = null;
+        const results = [];
 
-        try {
-            const message = await twilioClient.messages.create({
-                from: WHATSAPP_FROM,
-                to: whatsappTo,
-                body:
-                    `🚨 SILENT SOS - EMERGENCY ALERT\n\n` +
-                    `Emergency! I need help. Please contact me immediately.\n\n` +
-                    `My location:\n${mapLink}\n\n` +
-                    `Alert ID: ${alertId}`
-            });
+        // Send SOS to each saved contact
+        for (const contact of contacts) {
+            try {
+                let phone = String(contact.phone || "")
+                    .trim()
+                    .replace(/[\s()-]/g, "");
 
-            // Request accepted by Twilio; delivery is not guaranteed yet
-            whatsappSent = 1;
-            messageSid = message.sid;
-            messageStatus = message.status;
+                // Convert Indian mobile number to E.164 format
+                if (/^[6-9]\d{9}$/.test(phone)) {
+                    phone = "+91" + phone;
+                } else if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+                    whatsappFailed++;
 
-            console.log("Twilio Message SID:", message.sid);
-            console.log("Initial message status:", message.status);
-        } catch (error) {
-            whatsappFailed = 1;
-            whatsappErrorMessage = error.message;
+                    results.push({
+                        name: contact.name,
+                        success: false,
+                        error: "Invalid phone number"
+                    });
 
-            console.error("WhatsApp send failed:", error.message);
-            console.error("Twilio error code:", error.code);
+                    continue;
+                }
+
+                const message = await twilioClient.messages.create({
+                    from: WHATSAPP_FROM,
+                    to: `whatsapp:${phone}`,
+                    body:
+                        `🚨 SILENT SOS - EMERGENCY ALERT\n\n` +
+                        `An emergency alert has been triggered. ` +
+                        `Please contact the person who needs help.\n\n` +
+                        `Location: ${mapLink}\n` +
+                        `Alert ID: ${alertId}`
+                });
+
+                // Twilio accepted the message request
+                whatsappSent++;
+
+                results.push({
+                    name: contact.name,
+                    success: true,
+                    status: message.status,
+                    sid: message.sid
+                });
+
+                console.log(
+                    "Twilio message accepted for:",
+                    contact.name,
+                    message.status
+                );
+
+            } catch (error) {
+                whatsappFailed++;
+
+                results.push({
+                    name: contact.name,
+                    success: false,
+                    error: error.message,
+                    code: error.code || null
+                });
+
+                console.error(
+                    "WhatsApp failed for:",
+                    contact.name,
+                    error.message,
+                    error.code
+                );
+            }
         }
 
         return res.status(201).json({
@@ -127,18 +152,19 @@ router.post("/", async (req, res) => {
             message: "SOS alert saved",
             alert,
             mapLink,
+            totalContacts: contacts.length,
             whatsappSent,
             whatsappFailed,
-            messageSid,
-            messageStatus,
-            whatsappError: whatsappErrorMessage
+            results
         });
+
     } catch (error) {
         console.error("CREATE SOS ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Failed to create SOS alert",
+            error: error.message
         });
     }
 });
