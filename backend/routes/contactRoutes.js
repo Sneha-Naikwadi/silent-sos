@@ -3,7 +3,6 @@ const Contact = require("../models/Contact");
 
 const router = express.Router();
 
-
 // ===============================
 // ADD EMERGENCY CONTACT
 // ===============================
@@ -14,24 +13,46 @@ router.post("/", async (req, res) => {
 
         const { name, email, phone } = req.body;
 
-        // Validation
-       
-if (!name || !email || !phone || !/^\+[1-9]\d{7,14}$/.test(phone.trim())) {
-    return res.status(400).json({
-        success: false,
-        message: "Name, email and valid phone number are required"
-    });
-}
-        // Create contact
+        // Validate name, email and phone
+        if (
+            typeof name !== "string" ||
+            !name.trim() ||
+            typeof email !== "string" ||
+            !email.trim() ||
+            typeof phone !== "string" ||
+            !phone.trim()
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Name, email and valid phone number are required"
+            });
+        }
+
+        const cleanPhone = phone.trim();
+
+        // Accept 10-digit Indian mobile or international E.164 number
+        if (
+            !(
+                /^[6-9]\d{9}$/.test(cleanPhone) ||
+                /^\+[1-9]\d{7,14}$/.test(cleanPhone)
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid 10-digit Indian mobile number or international number with country code"
+            });
+        }
+
+        // Save contact in MongoDB
         const contact = await Contact.create({
             name: name.trim(),
             email: email.trim(),
-            phone: phone ? phone.trim() : ""
+            phone: cleanPhone
         });
 
-        console.log("Contact saved:", contact);
+        console.log("Contact saved:", contact._id);
 
-        res.status(201).json({
+        return res.status(201).json({
             success: true,
             message: "Emergency contact added successfully",
             contact
@@ -40,13 +61,12 @@ if (!name || !email || !phone || !/^\+[1-9]\d{7,14}$/.test(phone.trim())) {
     } catch (error) {
         console.error("ADD CONTACT ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to add contact"
         });
     }
 });
-
 
 // ===============================
 // GET ALL EMERGENCY CONTACTS
@@ -56,7 +76,7 @@ router.get("/", async (req, res) => {
         const contacts = await Contact.find()
             .sort({ createdAt: -1 });
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             contacts
         });
@@ -64,14 +84,14 @@ router.get("/", async (req, res) => {
     } catch (error) {
         console.error("GET CONTACTS ERROR:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
-            message: error.message
+            message: "Unable to fetch contacts"
         });
     }
 });
 
-
-// IMPORTANT
-// Export router
+// ===============================
+// EXPORT ROUTER
+// ===============================
 module.exports = router;
