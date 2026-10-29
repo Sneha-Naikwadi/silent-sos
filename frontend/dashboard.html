@@ -1,0 +1,82 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard | Silent SOS</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script defer src="dashboard.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <a class="brand" href="index.html">🛡️ Silent SOS</a>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="contacts.html">Contacts</a>
+      <a href="dashboard.html">Dashboard</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <h1>Dashboard</h1>
+    <p class="intro left">
+      Monitor demo emergency alerts and saved contacts.
+    </p>
+
+    <div class="button-row">
+      <a class="button-link" href="index.html">SOS Home</a>
+      <a class="button-link" href="contacts.html">Manage Contacts</a>
+    </div>
+
+    <!-- DASHBOARD STATISTICS -->
+    <section class="stats-grid">
+      <article class="stat-card">
+        <h3>Emergency Contacts</h3>
+        <strong id="totalContacts">—</strong>
+      </article>
+
+      <article class="stat-card">
+        <h3>Total SOS Alerts</h3>
+        <strong id="totalAlerts">—</strong>
+      </article>
+
+      <article class="stat-card">
+        <h3>Active Alerts</h3>
+        <strong id="activeAlerts">—</strong>
+      </article>
+
+      <article class="stat-card">
+        <h3>Resolved Alerts</h3>
+        <strong id="resolvedAlerts">—</strong>
+      </article>
+    </section>
+
+    <!-- SAVED EMERGENCY CONTACTS -->
+    <section class="panel">
+      <h2>Saved Emergency Contacts</h2>
+      <div id="dashboardContacts">Loading...</div>
+    </section>
+
+    <!-- SHARED LOCATIONS -->
+    <section class="panel">
+      <h2>Shared Locations</h2>
+      <p id="sharedLocationsMessage">
+        Loading shared locations...
+      </p>
+      <div id="sharedLocations"></div>
+    </section>
+
+    <!-- SOS ALERT HISTORY -->
+    <section class="panel">
+      <h2>SOS Alert History</h2>
+      <div id="alertsList">Loading...</div>
+    </section>
+
+    <p id="dashboardMessage" class="message" role="status"></p>
+  </main>
+
+  <footer>Silent SOS · Demo project</footer>
+</body>
+</html>

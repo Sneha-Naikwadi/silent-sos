@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emergency Contacts | Silent SOS</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script defer src="contacts.js"></script>
+</head>
+<body>
+  <header class="navbar">
+    <a class="brand" href="index.html">🛡️ Silent SOS</a>
+    <nav><a href="index.html">Home</a><a href="contacts.html">Contacts</a><a href="dashboard.html">Dashboard</a></nav>
+  </header>
+  <main class="page">
+    <h1>Emergency Contacts</h1>
+    <p class="intro left">Add trusted people you may want to contact in an emergency.</p>
+    <section class="panel">
+      <h2>Add New Contact</h2>
+      <form id="contactForm">
+        <label for="name">Full name</label><input id="name" name="name" required maxlength="100" placeholder="Full name">
+        <label for="phone">Phone number</label><input id="phone" name="phone" required type="tel" placeholder="Phone number">
+        <label for="email">Email (optional)</label><input id="email" name="email" type="email" placeholder="Email">
+        <label for="relationship">Relationship</label><input id="relationship" name="relationship" placeholder="e.g. Friend">
+        <button type="submit">Save Contact</button>
+      </form>
+      <p id="message" role="status" class="message"></p>
+    </section>
+    <section class="panel">
+      <h2>Saved Contacts</h2>
+      <div id="contactsList">Loading contacts...</div>
+    </section>
+  </main>
+  <footer>Silent SOS · Demo project</footer>
+</body>
+</html>

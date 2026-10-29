@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <script src="config.js"></script>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share Location | Silent SOS</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: Arial, sans-serif;
+      background: #eaf2ff;
+      color: #172554;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 440px;
+      padding: 28px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 8px 30px #193b7018;
+    }
+
+    h1 { margin-top: 0; font-size: 26px; }
+    p { line-height: 1.6; color: #475569; }
+
+    .consent {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 22px 0;
+      line-height: 1.5;
+    }
+
+    .consent input {
+      margin-top: 4px;
+      width: 18px;
+      height: 18px;
+    }
+
+    button {
+      width: 100%;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #2459c4;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    #message {
+      overflow-wrap: anywhere;
+      margin-top: 16px;
+    }
+
+    .note { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Share Your Location</h1>
+
+    <p id="welcome">
+      Checking your location-sharing link...
+    </p>
+
+    <p>
+      You control whether to share your location.
+      Your browser will ask for location permission.
+      Do not continue if you do not recognise this request.
+    </p>
+
+    <label class="consent">
+      <input type="checkbox" id="consent">
+      <span>
+        I agree to share my current location with the
+        Silent SOS contact who requested it.
+      </span>
+    </label>
+
+    <button id="shareButton" disabled>
+      Agree and Share My Location
+    </button>
+
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <p class="note">
+      This link expires after 15 minutes. Sharing through this
+      link sends your current location once; it does not track
+      your live movements continuously.
+    </p>
+  </main>
+
+  <script>
+    
+    const token = new URLSearchParams(location.search).get("token");
+const API_URL = `${window.API_BASE}/location-shares`.replace(/\/location-shares$/, "");
+    const welcome = document.getElementById("welcome");
+    const consent = document.getElementById("consent");
+    const shareButton = document.getElementById("shareButton");
+    const message = document.getElementById("message");
+
+    let validLink = false;
+
+    async function verifyLink() {
+      if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
+        welcome.textContent = "Invalid location-sharing link.";
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `${API_URL}/location-shares/verify/${encodeURIComponent(token)}`
+        );
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "This link is invalid or expired.");
+        }
+
+        welcome.textContent =
+          `Location sharing was requested by ${result.contactName}.`;
+
+        validLink = true;
+        shareButton.disabled = !consent.checked;
+      } catch (error) {
+        welcome.textContent = error.message;
+      }
+    }
+
+    consent.addEventListener("change", () => {
+      shareButton.disabled = !validLink || !consent.checked;
+    });
+
+    shareButton.addEventListener("click", () => {
+      if (!validLink || !consent.checked) {
+        message.textContent = "Please review and accept the consent first.";
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        message.textContent = "Location is not supported by this browser.";
+        return;
+      }
+
+      shareButton.disabled = true;
+      message.textContent = "Requesting browser location permission...";
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const response = await fetch(
+              `${API_URL}/location-shares/consent/${encodeURIComponent(token)}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  consent: true,
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude
+                })
+              }
+            );
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+              throw new Error(result.message || "Could not share location.");
+            }
+
+            message.textContent = "Your location has been shared successfully.";
+            consent.disabled = true;
+          } catch (error) {
+            message.textContent = error.message;
+            shareButton.disabled = false;
+          }
+        },
+        (error) => {
+          const errors = {
+            1: "Location permission was denied. Allow it in browser settings if you wish to share.",
+            2: "Your current location is unavailable. Try again when GPS is available.",
+            3: "Location request timed out. Please try again."
+          };
+
+          message.textContent =
+            errors[error.code] || "Unable to get your location.";
+
+          shareButton.disabled = false;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+    });
+
+    verifyLink();
+  </script>
+</body>
+</html>
